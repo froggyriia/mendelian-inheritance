@@ -58,7 +58,7 @@ library
     import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  MyLib
+    exposed-modules:  MendelInheritance
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -100,4 +100,5 @@ test-suite mendelian-inheritance-test
     -- Test dependencies.
     build-depends:
         base ^>=4.18.3.0,
+        HUnit,
         mendelian-inheritance
