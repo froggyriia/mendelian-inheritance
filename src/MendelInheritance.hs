@@ -4,13 +4,22 @@ module MendelInheritance
     Genotype (..),
     Gamete (..),
     GametePool (..),
+    Generation (..),
     dominantAllele,
     gametesFromGenotype,
     combineGametes,
     crossGametePools,
     cross,
+    phenotypeFromGenotype,
+    prettyGenotype,
+    prettyPhenotype,
+    uniqueGenotypes,
+    countGenotypeRatios,
+    countPhenotypeRatios,
   )
 where
+
+import Data.List (group, sort)
 
 type TraitName = String
 
@@ -100,6 +109,48 @@ phenotypeFromGenotype (Genotype gens) = Phenotype (buildPhenotype gens)
   where
     buildPhenotype [] = []
     buildPhenotype ((Gen name as) : gs) = (name, dominantAllele (Gen name as)) : buildPhenotype gs
+
+-- add pretty print
+prettyGenotype :: Genotype -> String
+prettyGenotype (Genotype gens) = concatMap showPair gens
+  where
+    showAllele (Dominant l _) = [l]
+    showAllele (Recessive l _) = [l]
+    showPair (Gen _ (a1, a2)) = showAllele a1 ++ showAllele a2
+
+prettyPhenotype :: Phenotype -> String
+prettyPhenotype (Phenotype traits) = unlines (map showTrait traits)
+  where
+    showTrait (name, allele) = name ++ ": " ++ traitOf allele
+
+uniqueGenotypes :: Generation -> Generation
+uniqueGenotypes (Generation gens) = Generation (removeDuplicates gens)
+  where
+    removeDuplicates [] = []
+    removeDuplicates (x : xs)
+      | x `elem` xs = removeDuplicates xs
+      | otherwise = x : removeDuplicates xs
+
+countPhenotypeRatios :: Generation -> [(String, Int)]
+countPhenotypeRatios (Generation gens) =
+  map (\grp -> (head grp, length grp)) grouped
+  where
+    normalize (Phenotype traits) = unlines $ map (\(n, a) -> n ++ ": " ++ traitOf a) traits
+    phenStrs = map (normalize . phenotypeFromGenotype) gens
+    grouped = group (sort phenStrs)
+
+countGenotypeRatios :: Generation -> [(String, Int)]
+countGenotypeRatios (Generation gens) =
+  map (\grp -> (head grp, length grp)) grouped
+  where
+    genStrs = map prettyGenotype gens
+    grouped = group (sort genStrs)
+
+-- TODO: add ratio counting
+
+-- My concerns:
+-- не нравится что phenotypeFromGenotype применяется только на генотип не сильно удобно применять на generation
+-- два разных pretty print
 
 -- someFunc :: IO ()
 -- someFunc = putStrLn "someFunc"
