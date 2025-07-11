@@ -4,39 +4,46 @@ import MendelInheritance
 
 main :: IO ()
 main = do
-  -- Аллели
-  let Just a = makeAllele 'A' "гребень"
-  let Just a' = makeAllele 'a' "нет гребня"
-  let Just b = makeAllele 'B' "оперённые ноги"
-  let Just b' = makeAllele 'b' "голые ноги"
+  -- Alleles:
+  -- A – comb
+  -- a – no comb
+  -- B – feathered legs
+  -- b – bare legs
+  let Just a = makeAllele 'A' "гребень" -- Dominant allele for comb
+  let Just a' = makeAllele 'a' "нет гребня" -- Recessive allele for no comb
+  let Just b = makeAllele 'B' "оперённые ноги" -- Dominant allele for feathered legs
+  let Just b' = makeAllele 'b' "голые ноги" -- Recessive allele for bare legs
 
-  -- Родительские генотипы: AABB × Aabb
+  -- Parent genotypes:
+  -- Rooster (AABB) × Hen (Aabb)
   let Just genAABB =
         makeGenotype
           =<< sequence
-            [ makeGen "comb" (a, a),
-              makeGen "legs" (b, b)
+            [ makeGen "comb" (a, a), -- Homozygous dominant for comb
+              makeGen "legs" (b, b) -- Homozygous dominant for legs
             ]
   let Just genAabb =
         makeGenotype
           =<< sequence
-            [ makeGen "comb" (a, a'),
-              makeGen "legs" (b', b')
+            [ makeGen "comb" (a, a'), -- Heterozygous for comb
+              makeGen "legs" (b', b') -- Homozygous recessive for legs
             ]
 
+  -- Print parent information
   putStrLn "\n--- Родители ---"
   putStrLn "Петух (AABB):"
-  putStrLn $ "Генотип: " ++ prettyGenotype genAABB
+  putStrLn $ "Генотип: " ++ prettyGenotype genAABB -- Print rooster genotype
   putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAABB)
 
   putStrLn "\nКурица (Aabb):"
-  putStrLn $ "Генотип: " ++ prettyGenotype genAabb
+  putStrLn $ "Генотип: " ++ prettyGenotype genAabb -- Print hen genotype
   putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAabb)
 
-  -- Первое поколение
+  -- First generation (F1) – result of crossing AABB × Aabb
   let Just gen1 = cross genAABB genAabb
   let gen1List = getGenotypes gen1
 
+  -- Print F1 generation
   putStrLn "\n--- Первое поколение ---"
   mapM_
     ( \g -> do
@@ -44,9 +51,10 @@ main = do
         putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype g)
     )
     gen1List
-    putStrLn
-    "\n--- Соотношение по генотипам ---"
-    Map.foldrWithKey
+
+  -- Print genotype ratio in F1
+  putStrLn "\n--- Соотношение по генотипам ---"
+  Map.foldrWithKey
     (\g n acc -> putStrLn (prettyGenotype g ++ " : " ++ show n) >> acc)
     (return ())
     (genotypeRatio gen1)
