@@ -2,8 +2,8 @@
 
 A Haskell library for modeling classical Mendelian inheritance — simulating how traits pass from parents to offspring based on genotype and dominance rules.
 
-👩‍🔬 By: Alina Khisamutdinova, Elizaveta Bubnova, Victoriia Gorbacheva  
-📘 [Documentation](./docs/index.md)
+By: Alina Khisamutdinova, Elizaveta Bubnova, Victoriia Gorbacheva  
+[Documentation](./docs/documentation.md)
 
 ---
 
