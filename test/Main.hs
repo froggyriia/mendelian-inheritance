@@ -1,55 +1,52 @@
-import Data.Complex (phase)
+module Main where
+
 import MendelInheritance
 
--- import Test.HUnit
-
--- Простые аллели
-a = Dominant 'A' "comb is present"
-
-a' = Recessive 'a' "comb is not present"
-
-b = Dominant 'B' "legs are present"
-
-b' = Recessive 'b' "legs are not present"
-
--- Гены
-gen1 = Gen "comb" (a, a') -- Aa
-
-gen2 = Gen "comb" (a', a') -- aa
-
-gen3 = Gen "legs" (b', b) -- bB
-
-gen4 = Gen "legs" (b', b') -- bb
-
-g1 = Genotype [gen1, gen3]
-
-g2 = Genotype [gen2, gen4]
-
--- -- Тесты
--- tests :: Test
--- tests =
---   TestList
---     [ "dominant from Aa" ~: dominantAllele gen1 ~?= a,
---       "dominant from aa" ~: dominantAllele gen2 ~?= a',
---       "dominant from bB" ~: dominantAllele gen3 ~?= b,
---       "dominant from bb" ~: dominantAllele gen4 ~?= b'
---     ]
-f1_genotypes = cross g1 g2
-
-f1_unique = uniqueGenotypes f1_genotypes
-
-f1_phenotypes = map phenotypeFromGenotype (case f1_unique of (Generation gens) -> gens)
-
+main :: IO ()
 main = do
-  putStrLn "=== Уникальные генотипы и их количество ==="
-  mapM_ printGenotypeRatio (countGenotypeRatios f1_genotypes)
+  -- Аллели
+  let Just a = makeAllele 'A' "гребень"
+  let Just a' = makeAllele 'a' "нет гребня"
+  let Just b = makeAllele 'B' "оперённые ноги"
+  let Just b' = makeAllele 'b' "голые ноги"
 
-  putStrLn "\n=== Уникальные фенотипы и их количество ==="
-  mapM_ printPhenotypeRatio (countPhenotypeRatios f1_genotypes)
+  -- Родительские генотипы: AABB × Aabb
+  let Just genAABB =
+        makeGenotype
+          =<< sequence
+            [ makeGen "comb" (a, a),
+              makeGen "legs" (b, b)
+            ]
+  let Just genAabb =
+        makeGenotype
+          =<< sequence
+            [ makeGen "comb" (a, a'),
+              makeGen "legs" (b', b')
+            ]
 
--- Печать результатов
-printGenotypeRatio :: (String, Int) -> IO ()
-printGenotypeRatio (gen, n) = putStrLn (gen ++ " — " ++ show n)
+  putStrLn "\n--- Родители ---"
+  putStrLn "Петух (AABB):"
+  putStrLn $ "Генотип: " ++ prettyGenotype genAABB
+  putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAABB)
 
-printPhenotypeRatio :: (String, Int) -> IO ()
-printPhenotypeRatio (phen, n) = putStrLn (phen ++ " — " ++ show n)
+  putStrLn "\nКурица (Aabb):"
+  putStrLn $ "Генотип: " ++ prettyGenotype genAabb
+  putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAabb)
+
+  -- Первое поколение
+  let Just gen1 = cross genAABB genAabb
+  let gen1List = getGenotypes gen1
+
+  putStrLn "\n--- Первое поколение ---"
+  mapM_
+    ( \g -> do
+        putStrLn $ "Генотип: " ++ prettyGenotype g
+        putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype g)
+    )
+    gen1List
+    putStrLn
+    "\n--- Соотношение по генотипам ---"
+    Map.foldrWithKey
+    (\g n acc -> putStrLn (prettyGenotype g ++ " : " ++ show n) >> acc)
+    (return ())
+    (genotypeRatio gen1)
