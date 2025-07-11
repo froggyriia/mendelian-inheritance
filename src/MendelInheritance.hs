@@ -27,6 +27,7 @@ module MendelInheritance
     uniqueGenotypes,
     genotypeRatio,
     phenotypeRatio,
+    pprintGeneration
   )
 where
 
@@ -36,6 +37,7 @@ import Data.List (nub, nubBy)
 import qualified Data.Map.Strict as Map
 
 -- Type synonyms
+
 type TraitName = String
 
 type TraitSpecification = String
@@ -43,6 +45,7 @@ type TraitSpecification = String
 type Letter = Char
 
 -- Data types
+
 data Allele
   = Dominant Letter TraitSpecification
   | Recessive Letter TraitSpecification
@@ -65,6 +68,32 @@ data GametePool = GametePool [Gamete]
 
 data Generation = Generation [Genotype]
   deriving (Eq, Show, Ord)
+
+-- Instance Show
+
+instance Show Allele where
+  show (Dominant letter _) = [letter]
+  show (Recessive letter _) = [letter]
+  
+instance Show Gene where
+  show (Gene _ (allele1, allele2)) = show allele1 ++ show allele2
+  
+instance Show Genotype where
+  show (Genotype genes) = concatMap show genes
+
+instance Show Phenotype where
+  show (Phenotype []) = ""
+  show (Phenotype ((traitname, a):xs)) = show a ++ show (Phenotype xs)
+
+instance Show Gamete where
+  show (Gamete []) = ""
+  show (Gamete ((traitname, a):as)) = show a ++ show (Gamete as)
+
+instance Show GametePool where
+  show (GametePool gametes) = unwords (map show gametes)
+
+instance Show Generation where
+  show (Generation genotypes) = unwords (map show genotypes)
 
 -- Make functions
 
@@ -203,3 +232,28 @@ genotypeRatio (Generation gens) = Map.fromListWith (+) (map (\g -> (g, 1)) gens)
 
 phenotypeRatio :: Generation -> Map.Map Phenotype Int
 phenotypeRatio (Generation gens) = Map.fromListWith (+) (map (\g -> (phenotypeFromGenotype g, 1)) gens)
+
+pprintGeneration :: Generation -> IO ()
+pprintGeneration gen = do
+  -- extracting genotypes from generation
+  let genList = getGenotypes gen
+  let uniqueGenList = getGenotypes $ uniqueGenotypes gen
+
+  putStrLn "\n--- First generation ---"
+  
+  mapM_ (\g -> do
+    putStrLn $ "Genotype: " ++ prettyGenotype g
+    putStrLn $ "Phenotype:\n" ++ prettyPhenotype (phenotypeFromGenotype g)
+    ) uniqueGenList
+    
+  -- Then print genotype ratio
+  putStrLn "\n--- Genotype ratio ---"
+  Map.foldrWithKey
+    (\g n acc -> putStrLn (prettyGenotype g ++ " : " ++ show n) >> acc)
+    (return ()) (genotypeRatio gen)
+  -- Then print phenotype ratio
+  putStrLn "\n--- Phenotype ratio ---"
+  Map.foldrWithKey
+    (\g n acc -> putStrLn (prettyPhenotype g ++ " : " ++ show n) >> acc)
+    (return ()) (phenotypeRatio gen)
+    
