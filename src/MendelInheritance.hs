@@ -34,6 +34,7 @@ where
 import Data.Char (toLower)
 import Data.Function (on)
 import Data.List (nub, nubBy)
+import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.Map.Strict as Map
 
 -- Type synonyms
@@ -60,23 +61,23 @@ data Gen = Gen TraitName (Allele, Allele)
   deriving (Eq, Ord)
 
 -- | A genotype is a list of genes representing a full genetic profile
-data Genotype = Genotype [Gen]
+newtype Genotype = Genotype [Gen]
   deriving (Eq, Ord)
 
 -- | A phenotype is the observable traits derived from a genotype
-data Phenotype = Phenotype [(TraitName, Allele)]
+newtype Phenotype = Phenotype [(TraitName, Allele)]
   deriving (Eq, Ord)
 
 -- | A gamete is a set of single alleles, one per trait, used in reproduction
-data Gamete = Gamete [(TraitName, Allele)]
+newtype Gamete = Gamete [(TraitName, Allele)]
   deriving (Eq, Ord)
 
 -- | A collection of gametes representing all reproductive options
-data GametePool = GametePool [Gamete]
+newtype GametePool = GametePool [Gamete]
   deriving (Eq, Ord)
 
 -- | A generation is a list of genotypes produced from crossing parents
-data Generation = Generation [Genotype]
+newtype Generation = Generation [Genotype]
   deriving (Eq, Ord)
 
 -- Instances Show
@@ -108,11 +109,17 @@ instance Show Generation where
 
 -- | Construct an allele from a letter and trait specification.
 -- Uppercase letters produce Dominant, lowercase Recessive.
-makeAllele :: Char -> TraitSpecification -> Maybe Allele
+makeAllele :: Letter -> TraitSpecification -> Maybe Allele
 makeAllele c spec
   | c >= 'A' && c <= 'Z' = Just (Dominant c spec)
   | c >= 'a' && c <= 'z' = Just (Recessive c spec)
   | otherwise = Nothing
+
+unsafeAllele :: Letter -> TraitSpecification -> Allele
+unsafeAllele c spec
+  | c >= 'A' && c <= 'Z' = Dominant c spec
+  | c >= 'a' && c <= 'z' = Recessive c spec
+  | otherwise = error "The letter is not in A..Z a..z"
 
 -- | Construct a gene from a trait name and pair of alleles.
 -- Only allowed if both alleles refer to the same gene letter (case-insensitive).
@@ -146,17 +153,13 @@ makeGamete alleles
 
 -- | Construct a gamete pool from a list of gametes.
 -- Fails if list is empty.
-makeGametePool :: [Gamete] -> Maybe GametePool
-makeGametePool gs
-  | not (null gs) = Just (GametePool gs)
-  | otherwise = Nothing
+makeGametePool :: NonEmpty Gamete -> GametePool
+makeGametePool gs = GametePool (toList gs)
 
 -- | Construct a generation from a list of genotypes.
 -- Fails if list is empty.
-makeGeneration :: [Genotype] -> Maybe Generation
-makeGeneration gens
-  | not (null gens) = Just (Generation gens)
-  | otherwise = Nothing
+makeGeneration :: NonEmpty Genotype -> Generation
+makeGeneration gens = Generation (toList gens)
 
 -- Get functions
 
@@ -202,33 +205,23 @@ gametesFromGenotype (Genotype gens) = GametePool (map Gamete (buildGametes gens)
     prepend _ [] = []
     prepend pair (x : xs) = (pair : x) : prepend pair xs
 
--- | Combines two gametes to form a genotype (if valid)
-combineGametes :: Gamete -> Gamete -> Maybe Genotype
-combineGametes (Gamete as1) (Gamete as2) = fmap Genotype (buildGens as1 as2)
-  where
-    buildGens [] [] = Just []
-    buildGens ((name1, a1) : xs1) ((name2, a2) : xs2)
-      | name1 == name2 = do
-          rest <- buildGens xs1 xs2
-          return (Gen name1 (a1, a2) : rest)
-      | otherwise = Nothing
-    buildGens _ _ = Nothing
+-- | Combines two gametes to form a genotype
+combineGametes :: Gamete -> Gamete -> Genotype
+combineGametes (Gamete as1) (Gamete as2)
+  | map fst as1 /= map fst as2 = error "combineGametes: gametes are not aligned by trait names"
+  | otherwise = Genotype [Gen name (a1, a2) | ((name, a1), (_, a2)) <- zip as1 as2]
 
 -- | Crosses two gamete pools to generate all possible offspring genotypes
-crossGametePools :: GametePool -> GametePool -> Maybe [Genotype]
-crossGametePools (GametePool g1s) (GametePool g2s) = fmap concat (sequence (crossAll g1s g2s))
-  where
-    crossAll [] _ = []
-    crossAll (g : gs) others = combineWithAll g others : crossAll gs others
-    combineWithAll _ [] = Just []
-    combineWithAll g (x : xs) = do
-      fstGen <- combineGametes g x
-      rest <- combineWithAll g xs
-      return (fstGen : rest)
+crossGametePools :: GametePool -> GametePool -> [Genotype]
+crossGametePools (GametePool g1s) (GametePool g2s) =
+  [ combineGametes g1 g2
+    | g1 <- g1s,
+      g2 <- g2s
+  ]
 
 -- | Crosses two parent genotypes to produce a generation of offspring
-cross :: Genotype -> Genotype -> Maybe Generation
-cross parent1 parent2 = fmap Generation (crossGametePools gp1 gp2)
+cross :: Genotype -> Genotype -> Generation
+cross parent1 parent2 = Generation (crossGametePools gp1 gp2)
   where
     gp1 = gametesFromGenotype parent1
     gp2 = gametesFromGenotype parent2
