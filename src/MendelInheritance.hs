@@ -34,10 +34,12 @@ module MendelInheritance
     -- * Getters
     getGeneLetter,
     getGametes,
+    getPhenotypeTraits,
     getGenotypes,
     getTraitName,
     getAlleles,
     getTraitSpecification,
+    getGenerationToPhenotypes,
 
     -- * Core functionality
     dominantAllele,
@@ -52,8 +54,12 @@ module MendelInheritance
     genotypeRatio,
     phenotypeRatio,
     pprintGeneration,
+
+    inferParentGenotypes
+
     computeNGenerations,
     computeNextGenerationFrom,
+
   )
 where
 
@@ -236,6 +242,10 @@ getGametes (GametePool gs) = gs
 getGenotypes :: Generation -> [Genotype]
 getGenotypes (Generation gs) = gs
 
+-- | Extract traits from phenotype
+getPhenotypeTraits :: Phenotype -> [(TraitName, Allele)]
+getPhenotypeTraits (Phenotype traits) = traits
+
 -- | Gets the trait name from a gene
 getTraitName :: Gen -> TraitName
 getTraitName (Gen name _) = name
@@ -248,6 +258,10 @@ getAlleles (Gen _ pair) = pair
 getTraitSpecification :: Allele -> TraitSpecification
 getTraitSpecification (Dominant _ trait) = trait
 getTraitSpecification (Recessive _ trait) = trait
+
+-- | Get all phenotypes from a generation
+getGenerationToPhenotypes :: Generation -> [Phenotype]
+getGenerationToPhenotypes (Generation genotypes) = map phenotypeFromGenotype genotypes
 
 -- Core functions
 
@@ -375,6 +389,34 @@ pprintGeneration gen = do
     (return ())
     (phenotypeRatio gen)
 
+
+-- | Infer possible parent genotype pairs that could produce the given phenotypes
+inferParentGenotypes :: [Phenotype] -> [(Genotype, Genotype)]
+inferParentGenotypes phenotypes =
+    [ (p1, p2) 
+    | p1 <- possibleGenotypes
+    , p2 <- possibleGenotypes
+    , all (`elem` offspringPhenotypes p1 p2) phenotypes
+    ]
+  where
+    -- All possible genotypes that could produce any of the phenotypes
+    possibleGenotypes = concatMap phenotypeToGenotypes phenotypes
+    
+    -- Convert phenotype to possible genotypes that could produce it
+    phenotypeToGenotypes (Phenotype traits) =
+        [ unsafeGenotype $ zipWith (Gen . fst) traits genePairs
+        | genePairs <- sequence (map traitToGenes traits)
+        ]
+      where
+        traitToGenes (_, a@(Dominant l _)) = 
+            [(a,a), (a, Recessive (toLower l) (getTraitSpecification a))]
+        traitToGenes (_, a@(Recessive _ _)) = [(a,a)]
+
+    -- Generate all possible offspring phenotypes from two parent genotypes
+    offspringPhenotypes p1 p2 = 
+        map phenotypeFromGenotype $ 
+        crossGametePools (gametesFromGenotype p1) (gametesFromGenotype p2)
+
 alleleSymbol :: Allele -> Char
 alleleSymbol (Dominant c _) = c
 alleleSymbol (Recessive c _) = c
@@ -387,3 +429,4 @@ extractAlleles :: Genotype -> [(Char, Char)]
 extractAlleles (Genotype gens) = map getAllelePair gens
   where
     getAllelePair (Gen _ (a1, a2)) = (getGeneLetter a1, getGeneLetter a2)
+
