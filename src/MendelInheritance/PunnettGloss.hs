@@ -1,4 +1,4 @@
-module PunnettGloss where
+module MendelInheritance.PunnettGloss where
 
 import Graphics.Gloss
 import MendelInheritance

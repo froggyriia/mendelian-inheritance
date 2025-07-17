@@ -1,7 +1,7 @@
 module Main where
 
 import MendelInheritance
-import PunnettGloss
+import MendelInheritance.PunnettGloss
 import qualified Data.Map as Map
 
 main :: IO ()
