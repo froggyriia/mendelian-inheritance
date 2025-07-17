@@ -230,6 +230,10 @@ getGametes (GametePool gs) = gs
 getGenotypes :: Generation -> [Genotype]
 getGenotypes (Generation gs) = gs
 
+-- | Extract traits from phenotype
+getPhenotypeTraits :: Phenotype -> [(TraitName, Allele)]
+getPhenotypeTraits (Phenotype traits) = traits
+
 -- | Gets the trait name from a gene
 getTraitName :: Gen -> TraitName
 getTraitName (Gen name _) = name
