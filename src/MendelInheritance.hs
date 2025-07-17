@@ -51,8 +51,6 @@ module MendelInheritance
     prettyGenotype,
     prettyPhenotype,
     uniqueGenotypes,
-    genotypeRatio,
-    phenotypeRatio,
     pprintGeneration,
     inferParentGenotypes,
     computeNGenerations,
@@ -65,7 +63,6 @@ import Data.Function (on)
 import Data.List (nub, nubBy, sortOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.Map.Strict as Map
-import GHC.Conc (par)
 
 -- Type synonyms
 
@@ -347,15 +344,10 @@ computeNextGenerationFrom (Generation individuals) =
 computeNGenerations :: Int -> Genotype -> Genotype -> Generation
 computeNGenerations n parent1 parent2
   | n <= 1 = cross parent1 parent2
-  | otherwise = computeNextGenerationFrom (computeNGenerations (n - 1) parent1 parent2)
-
--- | Computes how many times each genotype appears in a generation
-genotypeRatio :: Generation -> Map.Map Genotype Int
-genotypeRatio (Generation gens) = Map.fromListWith (+) (map (\g -> (g, 1)) gens)
-
--- | Computes how many times each phenotype appears in a generation
-phenotypeRatio :: Generation -> Map.Map Phenotype Int
-phenotypeRatio (Generation gens) = Map.fromListWith (+) (map (\g -> (phenotypeFromGenotype g, 1)) gens)
+  | otherwise = foldl step (cross parent1 parent2) [2 .. n]
+  where
+    step :: Generation -> Int -> Generation
+    step generation _ = computeNextGenerationFrom generation
 
 -- | Pretty-prints a generation with genotypes, phenotypes, and their ratios
 pprintGeneration :: Generation -> IO ()

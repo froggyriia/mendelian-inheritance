@@ -23,7 +23,7 @@ common warnings
 library
     import:           warnings
 
-    exposed-modules:  MendelInheritance, MendelInheritance.PunnettGloss
+    exposed-modules:  MendelInheritance, MendelInheritance.PunnettGloss, MendelInheritance.Probability
 
     build-depends:    containers ^>=0.6.7, base ^>=4.18.3.0, gloss
 

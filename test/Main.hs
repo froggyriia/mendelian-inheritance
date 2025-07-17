@@ -1,76 +1,89 @@
 module Main where
 
+import Data.List (nub)
 import qualified Data.Map.Strict as Map
 import MendelInheritance
+import MendelInheritance.Probability
+  ( Probability,
+    genotypeProbabilities,
+    genotypeRatio,
+    phenotypeProbabilities,
+    phenotypeRatio,
+  )
 import MendelInheritance.PunnettGloss
-import qualified Data.Map as Map
 
 main :: IO ()
 main = do
   -- Alleles:
-  -- A – comb
-  -- a – no comb
-  -- B – feathered legs
-  -- b – bare legs
-  let Just a = makeAllele 'A' "гребень" -- Dominant allele for comb
-  let Just a' = makeAllele 'a' "нет гребня" -- Recessive allele for no comb
-  let Just b = makeAllele 'B' "оперённые ноги" -- Dominant allele for feathered legs
-  let Just b' = makeAllele 'b' "голые ноги" -- Recessive allele for bare legs
+  -- A – comb, a – no comb; B – feathered legs, b – bare legs
+  let Just a = makeAllele 'A' "гребень"
+  let Just a' = makeAllele 'a' "нет гребня"
+  let Just b = makeAllele 'B' "оперённые ноги"
+  let Just b' = makeAllele 'b' "голые ноги"
 
-  -- Parent genotypes:
-  -- Rooster (AABB) × Hen (Aabb)
+  -- Parent genotypes: Rooster (AABB) × Hen (Aabb)
   let Just genAABB =
         makeGenotype
           =<< sequence
-            [ makeGen "comb" (a, a), -- Homozygous dominant for comb
-              makeGen "legs" (b, b) -- Homozygous dominant for legs
+            [ makeGen "comb" (a, a),
+              makeGen "legs" (b, b)
             ]
   let Just genAabb =
         makeGenotype
           =<< sequence
-            [ makeGen "comb" (a, a'), -- Heterozygous for comb
-              makeGen "legs" (b', b') -- Homozygous recessive for legs
+            [ makeGen "comb" (a, a'),
+              makeGen "legs" (b', b')
             ]
 
+  putStrLn "\n--- Parents ---"
+  putStrLn $ "Rooster: " ++ prettyGenotype genAABB
+  putStrLn $ "          " ++ prettyPhenotype (phenotypeFromGenotype genAABB)
+  putStrLn $ "Hen:     " ++ prettyGenotype genAabb
+  putStrLn $ "          " ++ prettyPhenotype (phenotypeFromGenotype genAabb)
 
-  -- Print parent information
-  putStrLn "\n--- Родители ---"
-  putStrLn "Петух (AABB):"
-  putStrLn $ "Генотип: " ++ prettyGenotype genAABB -- Print rooster genotype
-  putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAABB)
-
-  putStrLn "\nКурица (Aabb):"
-  putStrLn $ "Генотип: " ++ prettyGenotype genAabb -- Print hen genotype
-  putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAabb)
-
-  -- First generation (F1) – result of crossing AABB × Aabb
+  -- F1 generation
   let gen1 = cross genAABB genAabb
-  let gen1List = getGenotypes gen1
+  let f1 = getGenotypes gen1
 
-  -- Getting Alleles of parents
-  let rowHeaders = extractAlleles genAabb
-  let colHeaders = extractAlleles genAABB
-  
-  
+  putStrLn "\n--- F1 Generation ---"
+  mapM_ (putStrLn . prettyGenotype) f1
 
-  -- Print F1 generation
-  putStrLn "\n--- Первое поколение ---"
+  let countG1 = genotypeRatio gen1
+  putStrLn "\nсоотношение генотипов (F1):"
   mapM_
-    ( \g -> do
-        putStrLn $ "Генотип: " ++ prettyGenotype g
-        putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype g)
-    )
-    gen1List
+    (\(g, c) -> putStrLn $ prettyGenotype g ++ " : " ++ show c)
+    (Map.toList countG1)
 
-  -- Print genotype ratio in F1
-  putStrLn "\n--- Соотношение по генотипам ---"
+  let probG1 = genotypeProbabilities gen1
+  putStrLn "\nвероятности генотипов (F1):"
+  mapM_
+    (\(g, p) -> putStrLn $ prettyGenotype g ++ " : " ++ show (p * 100) ++ "%")
+    (Map.toList probG1)
 
-  Map.foldrWithKey
-    (\g count acc -> putStrLn (prettyGenotype g ++ " : " ++ show count) >> acc)
-    (return ())
+  -- F2 by crossing F1 individuals pairwise
+  let gen2 = computeNextGenerationFrom gen1
 
-    (genotypeRatio gen1)
+  let probG2 = genotypeProbabilities gen2
+  putStrLn "\nвероятности генотипов (F2):"
+  mapM_
+    (\(g, p) -> putStrLn $ prettyGenotype g ++ " : " ++ show (p * 100) ++ "%")
+    (Map.toList probG2)
 
-  -- Punnett square for first generation
-  drawPunnett gen1List
+  let probF2 = phenotypeProbabilities gen2
+  putStrLn "\nвероятности фенотипов (F2):"
+  mapM_
+    (\(g, p) -> putStrLn $ prettyGenotype g ++ " : " ++ show (p * 100) ++ "%")
+    (Map.toList probF2)
 
+  let f2 = getGenotypes gen2
+
+  -- infer possible parent pairs for observed F1 phenotypes
+  let f1Pheno = getGenerationToPhenotypes gen1
+  let candidates = inferParentGenotypes f1Pheno
+
+  putStrLn "\n--- Candidate parent genotype pairs for observed F1 phenotypes ---"
+  mapM_ (\(p1, p2) -> putStrLn $ prettyGenotype p1 ++ " × " ++ prettyGenotype p2) (nub candidates)
+
+  -- draw Punnett square for F1
+  putStrLn "\n--- Punnett square for parents ---"
+  drawPunnett f1
