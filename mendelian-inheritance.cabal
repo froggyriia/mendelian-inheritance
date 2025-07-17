@@ -23,9 +23,9 @@ common warnings
 library
     import:           warnings
 
-    exposed-modules:  MendelInheritance
+    exposed-modules:  MendelInheritance, PunnettGloss
 
-    build-depends:    containers ^>=0.6.7, base ^>=4.18.3.0
+    build-depends:    containers ^>=0.6.7, base ^>=4.18.3.0, gloss
 
     hs-source-dirs:   src
 
@@ -46,4 +46,5 @@ test-suite mendelian-inheritance-test
         base ^>=4.18.3.0,
         HUnit,
         containers ^>=0.6.7,
-        mendelian-inheritance
+        mendelian-inheritance,
+        gloss
