@@ -1,5 +1,6 @@
 module Main where
 
+import qualified Data.Map.Strict as Map
 import MendelInheritance
 import MendelInheritance.PunnettGloss
 import qualified Data.Map as Map
@@ -63,10 +64,13 @@ main = do
 
   -- Print genotype ratio in F1
   putStrLn "\n--- Соотношение по генотипам ---"
+
   Map.foldrWithKey
-    (\g n acc -> putStrLn (prettyGenotype g ++ " : " ++ show n) >> acc)
+    (\g count acc -> putStrLn (prettyGenotype g ++ " : " ++ show count) >> acc)
     (return ())
+
     (genotypeRatio gen1)
 
   -- Punnett square for first generation
   drawPunnett gen1List
+
