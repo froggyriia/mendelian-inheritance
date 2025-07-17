@@ -1,21 +1,42 @@
+{-# LANGUAGE TupleSections #-}
+
 module MendelInheritance
-  ( Allele,
+  ( -- * Core types
+    Allele,
     Gen,
     Genotype,
+    Phenotype,
     Gamete,
     GametePool,
     Generation,
+
+    -- * Safe smart-constructors
     makeAllele,
+    isDominant,
+    canonPair,
     makeGen,
     makeGenotype,
     makeGamete,
     makeGametePool,
     makeGeneration,
+
+    -- * Unsafe constructors (partial)
+    unsafeAllele,
+    unsafeGen,
+    unsafeGenotype,
+    unsafeGamete,
+    unsafeGeneration,
+    unsafePhenotype,
+
+    -- * Getters
+    getGeneLetter,
     getGametes,
     getGenotypes,
     getTraitName,
     getAlleles,
     getTraitSpecification,
+
+    -- * Core functionality
     dominantAllele,
     gametesFromGenotype,
     combineGametes,
@@ -31,9 +52,9 @@ module MendelInheritance
   )
 where
 
-import Data.Char (toLower)
+import Data.Char (toLower, toUpper)
 import Data.Function (on)
-import Data.List (nub, nubBy)
+import Data.List (nub, nubBy, sortOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.Map.Strict as Map
 
@@ -115,17 +136,23 @@ makeAllele c spec
   | c >= 'a' && c <= 'z' = Just (Recessive c spec)
   | otherwise = Nothing
 
-unsafeAllele :: Letter -> TraitSpecification -> Allele
-unsafeAllele c spec
-  | c >= 'A' && c <= 'Z' = Dominant c spec
-  | c >= 'a' && c <= 'z' = Recessive c spec
-  | otherwise = error "The letter is not in A..Z a..z"
+-- | “Is this allele the dominant one?”
+isDominant :: Allele -> Bool
+isDominant (Dominant _ _) = True
+isDominant _ = False
+
+-- | Given a pair of alleles that are the same gene, always
+-- put the Dominant one on the left.
+canonPair :: (Allele, Allele) -> (Allele, Allele)
+canonPair (a1, a2)
+  | isDominant a2 && not (isDominant a1) = (a2, a1)
+  | otherwise = (a1, a2)
 
 -- | Construct a gene from a trait name and pair of alleles.
 -- Only allowed if both alleles refer to the same gene letter (case-insensitive).
 makeGen :: TraitName -> (Allele, Allele) -> Maybe Gen
 makeGen name (a1, a2)
-  | sameGene a1 a2 = Just (Gen name (a1, a2))
+  | sameGene a1 a2 = Just (Gen name (canonPair (a1, a2)))
   | otherwise = Nothing
   where
     sameGene x y = toLower (geneLetter x) == toLower (geneLetter y)
@@ -136,11 +163,17 @@ makeGen name (a1, a2)
 -- Ensures each trait name is unique.
 makeGenotype :: [Gen] -> Maybe Genotype
 makeGenotype gens
-  | length uniqueNames == length gens = Just (Genotype gens)
-  | otherwise = Nothing
+  | length uniqueTraits == length gens =
+      Just . Genotype $ sortOn geneKey gens
+  | otherwise =
+      Nothing
   where
-    uniqueNames = nubBy ((==) `on` getName) gens
-    getName (Gen name _) = name
+    uniqueTraits = nubBy ((==) `on` getTraitName) gens
+
+    -- for sorting we pull out the letter of the first allele, uppercase
+    geneKey (Gen _ (a1, _)) = toUpper (getGeneLetter a1)
+
+    getTraitName (Gen nm _) = nm
 
 -- | Construct a gamete from a list of trait-allele pairs.
 -- Ensures trait names are unique in the gamete.
@@ -161,7 +194,33 @@ makeGametePool gs = GametePool (toList gs)
 makeGeneration :: NonEmpty Genotype -> Generation
 makeGeneration gens = Generation (toList gens)
 
+unsafeAllele :: Letter -> TraitSpecification -> Allele
+unsafeAllele c spec
+  | c >= 'A' && c <= 'Z' = Dominant c spec
+  | c >= 'a' && c <= 'z' = Recessive c spec
+  | otherwise = error "The letter is not in A..Z a..z"
+
+unsafeGen :: TraitName -> (Allele, Allele) -> Gen
+unsafeGen name pair = Gen name pair
+
+unsafeGenotype :: [Gen] -> Genotype
+unsafeGenotype = Genotype
+
+unsafeGamete :: [(TraitName, Allele)] -> Gamete
+unsafeGamete = Gamete
+
+unsafeGeneration :: [Genotype] -> Generation
+unsafeGeneration = Generation
+
+unsafePhenotype :: [(TraitName, Allele)] -> Phenotype
+unsafePhenotype = Phenotype
+
 -- Get functions
+
+-- | Extract the “gene letter” from an allele
+getGeneLetter :: Allele -> Letter
+getGeneLetter (Dominant c _) = c
+getGeneLetter (Recessive c _) = c
 
 -- | Extracts list of gametes from a GametePool
 getGametes :: GametePool -> [Gamete]
@@ -188,15 +247,13 @@ getTraitSpecification (Recessive _ trait) = trait
 
 -- | Returns the dominant allele from a gene
 dominantAllele :: Gen -> Allele
-dominantAllele (Gen _ (a1, a2)) =
-  case (a1, a2) of
-    (Dominant _ _, _) -> a1
-    (_, Dominant _ _) -> a2
-    _ -> a1
+dominantAllele (Gen _ (a1, a2))
+  | isDominant a1 = a1
+  | otherwise = a2
 
 -- | Builds all possible gametes from a genotype
 gametesFromGenotype :: Genotype -> GametePool
-gametesFromGenotype (Genotype gens) = GametePool (map Gamete (buildGametes gens))
+gametesFromGenotype (Genotype gens) = GametePool (map unsafeGamete (buildGametes gens))
   where
     buildGametes [] = [[]]
     buildGametes (Gen name (a1, a2) : gs) =
@@ -208,8 +265,8 @@ gametesFromGenotype (Genotype gens) = GametePool (map Gamete (buildGametes gens)
 -- | Combines two gametes to form a genotype
 combineGametes :: Gamete -> Gamete -> Genotype
 combineGametes (Gamete as1) (Gamete as2)
-  | map fst as1 /= map fst as2 = error "combineGametes: gametes are not aligned by trait names"
-  | otherwise = Genotype [Gen name (a1, a2) | ((name, a1), (_, a2)) <- zip as1 as2]
+  | map fst as1 /= map fst as2 = error "Gametes must have the same traits in the same order"
+  | otherwise = unsafeGenotype [unsafeGen name (a1, a2) | ((name, a1), (_, a2)) <- zip as1 as2]
 
 -- | Crosses two gamete pools to generate all possible offspring genotypes
 crossGametePools :: GametePool -> GametePool -> [Genotype]
@@ -221,14 +278,14 @@ crossGametePools (GametePool g1s) (GametePool g2s) =
 
 -- | Crosses two parent genotypes to produce a generation of offspring
 cross :: Genotype -> Genotype -> Generation
-cross parent1 parent2 = Generation (crossGametePools gp1 gp2)
+cross parent1 parent2 = unsafeGeneration (crossGametePools gp1 gp2)
   where
     gp1 = gametesFromGenotype parent1
     gp2 = gametesFromGenotype parent2
 
 -- | Derives phenotype from genotype by choosing dominant allele for each gene
 phenotypeFromGenotype :: Genotype -> Phenotype
-phenotypeFromGenotype (Genotype gens) = Phenotype (map toTrait gens)
+phenotypeFromGenotype (Genotype gens) = unsafePhenotype (map toTrait gens)
   where
     toTrait g@(Gen name _) = (name, dominantAllele g)
 
@@ -248,7 +305,7 @@ prettyPhenotype (Phenotype traits) = unlines (map showTrait traits)
 
 -- | Removes duplicate genotypes from a generation
 uniqueGenotypes :: Generation -> Generation
-uniqueGenotypes (Generation gens) = Generation (removeDuplicates gens)
+uniqueGenotypes (Generation gens) = unsafeGeneration (removeDuplicates gens)
   where
     removeDuplicates [] = []
     removeDuplicates (x : xs)
