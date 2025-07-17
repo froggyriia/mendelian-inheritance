@@ -1,6 +1,9 @@
 module Main where
 
+import qualified Data.Map.Strict as Map
 import MendelInheritance
+import MendelInheritance.PunnettGloss
+import qualified Data.Map as Map
 
 main :: IO ()
 main = do
@@ -29,6 +32,7 @@ main = do
               makeGen "legs" (b', b') -- Homozygous recessive for legs
             ]
 
+
   -- Print parent information
   putStrLn "\n--- Родители ---"
   putStrLn "Петух (AABB):"
@@ -40,8 +44,14 @@ main = do
   putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAabb)
 
   -- First generation (F1) – result of crossing AABB × Aabb
-  let Just gen1 = cross genAABB genAabb
+  let gen1 = cross genAABB genAabb
   let gen1List = getGenotypes gen1
+
+  -- Getting Alleles of parents
+  let rowHeaders = extractAlleles genAabb
+  let colHeaders = extractAlleles genAABB
+  
+  
 
   -- Print F1 generation
   putStrLn "\n--- Первое поколение ---"
@@ -54,7 +64,13 @@ main = do
 
   -- Print genotype ratio in F1
   putStrLn "\n--- Соотношение по генотипам ---"
+
   Map.foldrWithKey
-    (\g n acc -> putStrLn (prettyGenotype g ++ " : " ++ show n) >> acc)
+    (\g count acc -> putStrLn (prettyGenotype g ++ " : " ++ show count) >> acc)
     (return ())
+
     (genotypeRatio gen1)
+
+  -- Punnett square for first generation
+  drawPunnett gen1List
+

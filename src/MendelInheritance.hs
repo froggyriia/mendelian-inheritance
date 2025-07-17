@@ -19,6 +19,9 @@ module MendelInheritance
     makeGamete,
     makeGametePool,
     makeGeneration,
+    alleleSymbol,
+    unGenotype,
+    extractAlleles,
 
     -- * Unsafe constructors (partial)
     unsafeAllele,
@@ -51,7 +54,12 @@ module MendelInheritance
     genotypeRatio,
     phenotypeRatio,
     pprintGeneration,
+
     inferParentGenotypes
+
+    computeNGenerations,
+    computeNextGenerationFrom,
+
   )
 where
 
@@ -60,6 +68,7 @@ import Data.Function (on)
 import Data.List (nub, nubBy, sortOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.Map.Strict as Map
+import GHC.Conc (par)
 
 -- Type synonyms
 
@@ -256,6 +265,14 @@ getGenerationToPhenotypes (Generation genotypes) = map phenotypeFromGenotype gen
 
 -- Core functions
 
+pairs :: [a] -> [(a, a)]
+pairs ls =
+  [ (x, y)
+    | (i, x) <- zip [0 ..] ls,
+      (j, y) <- zip [0 ..] ls,
+      i < j
+  ]
+
 -- | Returns the dominant allele from a gene
 dominantAllele :: Gen -> Allele
 dominantAllele (Gen _ (a1, a2))
@@ -323,6 +340,18 @@ uniqueGenotypes (Generation gens) = unsafeGeneration (removeDuplicates gens)
       | x `elem` xs = removeDuplicates xs
       | otherwise = x : removeDuplicates xs
 
+computeNextGenerationFrom :: Generation -> Generation
+computeNextGenerationFrom (Generation individuals) =
+  let pools = map gametesFromGenotype individuals
+      parentPairs = pairs pools
+      nextGeneration = [g | (gp1, gp2) <- parentPairs, g <- crossGametePools gp1 gp2]
+   in unsafeGeneration nextGeneration
+
+computeNGenerations :: Int -> Genotype -> Genotype -> Generation
+computeNGenerations n parent1 parent2
+  | n <= 1 = cross parent1 parent2
+  | otherwise = computeNextGenerationFrom (computeNGenerations (n - 1) parent1 parent2)
+
 -- | Computes how many times each genotype appears in a generation
 genotypeRatio :: Generation -> Map.Map Genotype Int
 genotypeRatio (Generation gens) = Map.fromListWith (+) (map (\g -> (g, 1)) gens)
@@ -360,6 +389,7 @@ pprintGeneration gen = do
     (return ())
     (phenotypeRatio gen)
 
+
 -- | Infer possible parent genotype pairs that could produce the given phenotypes
 inferParentGenotypes :: [Phenotype] -> [(Genotype, Genotype)]
 inferParentGenotypes phenotypes =
@@ -386,3 +416,17 @@ inferParentGenotypes phenotypes =
     offspringPhenotypes p1 p2 = 
         map phenotypeFromGenotype $ 
         crossGametePools (gametesFromGenotype p1) (gametesFromGenotype p2)
+
+alleleSymbol :: Allele -> Char
+alleleSymbol (Dominant c _) = c
+alleleSymbol (Recessive c _) = c
+
+
+unGenotype :: Genotype -> [(String, (Allele, Allele))]
+unGenotype (Genotype gens) = [(getTraitName g, getAlleles g) | g <- gens]
+
+extractAlleles :: Genotype -> [(Char, Char)]
+extractAlleles (Genotype gens) = map getAllelePair gens
+  where
+    getAllelePair (Gen _ (a1, a2)) = (getGeneLetter a1, getGeneLetter a2)
+
