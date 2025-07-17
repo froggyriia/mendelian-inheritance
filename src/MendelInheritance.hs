@@ -54,12 +54,9 @@ module MendelInheritance
     genotypeRatio,
     phenotypeRatio,
     pprintGeneration,
-
-    inferParentGenotypes
-
+    inferParentGenotypes,
     computeNGenerations,
     computeNextGenerationFrom,
-
   )
 where
 
@@ -389,38 +386,36 @@ pprintGeneration gen = do
     (return ())
     (phenotypeRatio gen)
 
-
 -- | Infer possible parent genotype pairs that could produce the given phenotypes
 inferParentGenotypes :: [Phenotype] -> [(Genotype, Genotype)]
 inferParentGenotypes phenotypes =
-    [ (p1, p2) 
-    | p1 <- possibleGenotypes
-    , p2 <- possibleGenotypes
-    , all (`elem` offspringPhenotypes p1 p2) phenotypes
-    ]
+  [ (p1, p2)
+    | p1 <- possibleGenotypes,
+      p2 <- possibleGenotypes,
+      all (`elem` offspringPhenotypes p1 p2) phenotypes
+  ]
   where
     -- All possible genotypes that could produce any of the phenotypes
     possibleGenotypes = concatMap phenotypeToGenotypes phenotypes
-    
+
     -- Convert phenotype to possible genotypes that could produce it
     phenotypeToGenotypes (Phenotype traits) =
-        [ unsafeGenotype $ zipWith (Gen . fst) traits genePairs
+      [ unsafeGenotype $ zipWith (Gen . fst) traits genePairs
         | genePairs <- sequence (map traitToGenes traits)
-        ]
+      ]
       where
-        traitToGenes (_, a@(Dominant l _)) = 
-            [(a,a), (a, Recessive (toLower l) (getTraitSpecification a))]
-        traitToGenes (_, a@(Recessive _ _)) = [(a,a)]
+        traitToGenes (_, a@(Dominant l _)) =
+          [(a, a), (a, Recessive (toLower l) (getTraitSpecification a))]
+        traitToGenes (_, a@(Recessive _ _)) = [(a, a)]
 
     -- Generate all possible offspring phenotypes from two parent genotypes
-    offspringPhenotypes p1 p2 = 
-        map phenotypeFromGenotype $ 
+    offspringPhenotypes p1 p2 =
+      map phenotypeFromGenotype $
         crossGametePools (gametesFromGenotype p1) (gametesFromGenotype p2)
 
 alleleSymbol :: Allele -> Char
 alleleSymbol (Dominant c _) = c
 alleleSymbol (Recessive c _) = c
-
 
 unGenotype :: Genotype -> [(String, (Allele, Allele))]
 unGenotype (Genotype gens) = [(getTraitName g, getAlleles g) | g <- gens]
@@ -429,4 +424,3 @@ extractAlleles :: Genotype -> [(Char, Char)]
 extractAlleles (Genotype gens) = map getAllelePair gens
   where
     getAllelePair (Gen _ (a1, a2)) = (getGeneLetter a1, getGeneLetter a2)
-
