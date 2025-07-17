@@ -1,60 +1,58 @@
 module Main where
 
+import qualified Data.Map.Strict as Map
 import MendelInheritance
 
 main :: IO ()
 main = do
-  -- Alleles:
-  -- A – comb
-  -- a – no comb
-  -- B – feathered legs
-  -- b – bare legs
-  let Just a = makeAllele 'A' "гребень" -- Dominant allele for comb
-  let Just a' = makeAllele 'a' "нет гребня" -- Recessive allele for no comb
-  let Just b = makeAllele 'B' "оперённые ноги" -- Dominant allele for feathered legs
-  let Just b' = makeAllele 'b' "голые ноги" -- Recessive allele for bare legs
+  -- 1) Создаём аллели с помощью безопасного конструктора
+  let Just alleleA = makeAllele 'A' "гребень"
+      Just allelea = makeAllele 'a' "нет гребня"
+      Just alleleB = makeAllele 'B' "оперённые ноги"
+      Just alleleb = makeAllele 'b' "голые ноги"
 
-  -- Parent genotypes:
-  -- Rooster (AABB) × Hen (Aabb)
-  let Just genAABB =
-        makeGenotype
-          =<< sequence
-            [ makeGen "comb" (a, a), -- Homozygous dominant for comb
-              makeGen "legs" (b, b) -- Homozygous dominant for legs
-            ]
-  let Just genAabb =
-        makeGenotype
-          =<< sequence
-            [ makeGen "comb" (a, a'), -- Heterozygous for comb
-              makeGen "legs" (b', b') -- Homozygous recessive for legs
-            ]
+  -- 2) Строим родительские генотипы
+  let parent1Genes =
+        sequence
+          [ makeGen "comb" (alleleA, alleleA),
+            makeGen "legs" (alleleB, alleleB)
+          ]
+      parent2Genes =
+        sequence
+          [ makeGen "comb" (alleleA, allelea),
+            makeGen "legs" (alleleb, alleleb)
+          ]
 
-  -- Print parent information
-  putStrLn "\n--- Родители ---"
-  putStrLn "Петух (AABB):"
-  putStrLn $ "Генотип: " ++ prettyGenotype genAABB -- Print rooster genotype
-  putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAABB)
+  let Just rooster = parent1Genes >>= makeGenotype
+      Just hen = parent2Genes >>= makeGenotype
 
-  putStrLn "\nКурица (Aabb):"
-  putStrLn $ "Генотип: " ++ prettyGenotype genAabb -- Print hen genotype
-  putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genAabb)
+  -- 3) Печатаем информацию о родителях
+  printIndividual "Петух (AABB)" rooster
+  printIndividual "Курица (Aabb)" hen
 
-  -- First generation (F1) – result of crossing AABB × Aabb
-  let Just gen1 = cross genAABB genAabb
-  let gen1List = getGenotypes gen1
+  -- 4) Получаем первое поколение (F1)
+  let f1 = cross rooster hen
+      f1Genotypes = getGenotypes f1
 
-  -- Print F1 generation
-  putStrLn "\n--- Первое поколение ---"
-  mapM_
-    ( \g -> do
-        putStrLn $ "Генотип: " ++ prettyGenotype g
-        putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype g)
-    )
-    gen1List
+  putStrLn "\n--- Первое поколение (F1) ---"
+  mapM_ printIndividualSimple f1Genotypes
 
-  -- Print genotype ratio in F1
-  putStrLn "\n--- Соотношение по генотипам ---"
+  -- 5) Соотношение по генотипам в F1
+  putStrLn "\n--- Соотношение по генотипам в F1 ---"
   Map.foldrWithKey
-    (\g n acc -> putStrLn (prettyGenotype g ++ " : " ++ show n) >> acc)
+    (\g count acc -> putStrLn (prettyGenotype g ++ " : " ++ show count) >> acc)
     (return ())
-    (genotypeRatio gen1)
+    (genotypeRatio f1)
+
+-- | Печать полной информации об индивидууме
+printIndividual :: String -> Genotype -> IO ()
+printIndividual label genotype = do
+  putStrLn $ "\n" ++ label
+  putStrLn $ "Генотип: " ++ prettyGenotype genotype
+  putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genotype)
+
+-- | Печать без заголовка (для списка потомков)
+printIndividualSimple :: Genotype -> IO ()
+printIndividualSimple genotype = do
+  putStrLn $ "Генотип: " ++ prettyGenotype genotype
+  putStrLn $ "Фенотип:\n" ++ prettyPhenotype (phenotypeFromGenotype genotype)

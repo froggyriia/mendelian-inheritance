@@ -49,6 +49,8 @@ module MendelInheritance
     genotypeRatio,
     phenotypeRatio,
     pprintGeneration,
+    computeNGenerations,
+    computeNextGenerationFrom,
   )
 where
 
@@ -57,6 +59,7 @@ import Data.Function (on)
 import Data.List (nub, nubBy, sortOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.Map.Strict as Map
+import GHC.Conc (par)
 
 -- Type synonyms
 
@@ -245,6 +248,14 @@ getTraitSpecification (Recessive _ trait) = trait
 
 -- Core functions
 
+pairs :: [a] -> [(a, a)]
+pairs ls =
+  [ (x, y)
+    | (i, x) <- zip [0 ..] ls,
+      (j, y) <- zip [0 ..] ls,
+      i < j
+  ]
+
 -- | Returns the dominant allele from a gene
 dominantAllele :: Gen -> Allele
 dominantAllele (Gen _ (a1, a2))
@@ -311,6 +322,18 @@ uniqueGenotypes (Generation gens) = unsafeGeneration (removeDuplicates gens)
     removeDuplicates (x : xs)
       | x `elem` xs = removeDuplicates xs
       | otherwise = x : removeDuplicates xs
+
+computeNextGenerationFrom :: Generation -> Generation
+computeNextGenerationFrom (Generation individuals) =
+  let pools = map gametesFromGenotype individuals
+      parentPairs = pairs pools
+      nextGeneration = [g | (gp1, gp2) <- parentPairs, g <- crossGametePools gp1 gp2]
+   in unsafeGeneration nextGeneration
+
+computeNGenerations :: Int -> Genotype -> Genotype -> Generation
+computeNGenerations n parent1 parent2
+  | n <= 1 = cross parent1 parent2
+  | otherwise = computeNextGenerationFrom (computeNGenerations (n - 1) parent1 parent2)
 
 -- | Computes how many times each genotype appears in a generation
 genotypeRatio :: Generation -> Map.Map Genotype Int
