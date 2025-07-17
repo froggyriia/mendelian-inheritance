@@ -19,6 +19,9 @@ module MendelInheritance
     makeGamete,
     makeGametePool,
     makeGeneration,
+    alleleSymbol,
+    unGenotype,
+    extractAlleles,
 
     -- * Unsafe constructors (partial)
     unsafeAllele,
@@ -371,3 +374,16 @@ pprintGeneration gen = do
     (\g n acc -> putStrLn (prettyPhenotype g ++ " : " ++ show n) >> acc)
     (return ())
     (phenotypeRatio gen)
+
+alleleSymbol :: Allele -> Char
+alleleSymbol (Dominant c _) = c
+alleleSymbol (Recessive c _) = c
+
+
+unGenotype :: Genotype -> [(String, (Allele, Allele))]
+unGenotype (Genotype gens) = [(getTraitName g, getAlleles g) | g <- gens]
+
+extractAlleles :: Genotype -> [(Char, Char)]
+extractAlleles (Genotype gens) = map getAllelePair gens
+  where
+    getAllelePair (Gen _ (a1, a2)) = (getGeneLetter a1, getGeneLetter a2)
