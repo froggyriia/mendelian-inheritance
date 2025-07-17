@@ -31,6 +31,7 @@ module MendelInheritance
     -- * Getters
     getGeneLetter,
     getGametes,
+    getPhenotypeTraits,
     getGenotypes,
     getTraitName,
     getAlleles,
