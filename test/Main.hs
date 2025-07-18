@@ -3,6 +3,7 @@ module Main where
 import Data.List (nub)
 import qualified Data.Map.Strict as Map
 import MendelInheritance
+import MendelInheritance (phenotypeRatio)
 import MendelInheritance.Probability
   ( Probability,
     genotypeProbabilities,
@@ -49,13 +50,19 @@ main = do
   mapM_ (putStrLn . prettyGenotype) f1
 
   let countG1 = genotypeRatio gen1
-  putStrLn "\nсоотношение генотипов (F1):"
+  putStrLn "\nGenotypes ratio (F1):"
+  mapM_
+    (\(g, c) -> putStrLn $ prettyGenotype g ++ " : " ++ show c)
+    (Map.toList countG1)
+
+  let countF1 = phenotypeRatio gen1
+  putStrLn "\nPhenotypes ratio (F1):"
   mapM_
     (\(g, c) -> putStrLn $ prettyGenotype g ++ " : " ++ show c)
     (Map.toList countG1)
 
   let probG1 = genotypeProbabilities gen1
-  putStrLn "\nвероятности генотипов (F1):"
+  putStrLn "\nGenotypes probabilities (F1):"
   mapM_
     (\(g, p) -> putStrLn $ prettyGenotype g ++ " : " ++ show (p * 100) ++ "%")
     (Map.toList probG1)
@@ -64,13 +71,13 @@ main = do
   let gen2 = computeNextGenerationFrom gen1
 
   let probG2 = genotypeProbabilities gen2
-  putStrLn "\nвероятности генотипов (F2):"
+  putStrLn "\nGenotypes probabilities (F2):"
   mapM_
     (\(g, p) -> putStrLn $ prettyGenotype g ++ " : " ++ show (p * 100) ++ "%")
     (Map.toList probG2)
 
   let probF2 = phenotypeProbabilities gen2
-  putStrLn "\nвероятности фенотипов (F2):"
+  putStrLn "\nPhenotype probabilities (F2):"
   mapM_
     (\(g, p) -> putStrLn $ prettyGenotype g ++ " : " ++ show (p * 100) ++ "%")
     (Map.toList probF2)

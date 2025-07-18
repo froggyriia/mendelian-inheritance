@@ -63,6 +63,7 @@ import Data.Function (on)
 import Data.List (nub, nubBy, sortOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.Map.Strict as Map
+import MendelInheritance.Probability (genotypeRatio, phenotypeRatio)
 
 -- Type synonyms
 
@@ -132,6 +133,105 @@ instance Show GametePool where
 instance Show Generation where
   show (Generation genotypes) = unwords (map show genotypes)
 
+-- Core functions
+
+-- | Returns the dominant allele from a gene
+dominantAllele :: Gen -> Allele
+dominantAllele (Gen _ (a1, a2))
+  | isDominant a1 = a1
+  | otherwise = a2
+
+-- | Builds all possible gametes from a genotype
+gametesFromGenotype :: Genotype -> GametePool
+gametesFromGenotype (Genotype gens) = GametePool (map unsafeGamete (buildGametes gens))
+  where
+    buildGametes [] = [[]]
+    buildGametes (Gen name (a1, a2) : gs) =
+      prepend (name, a1) (buildGametes gs)
+        ++ prepend (name, a2) (buildGametes gs)
+    prepend _ [] = []
+    prepend pair (x : xs) = (pair : x) : prepend pair xs
+
+-- | Combines two gametes to form a genotype
+combineGametes :: Gamete -> Gamete -> Genotype
+combineGametes (Gamete as1) (Gamete as2)
+  | map fst as1 /= map fst as2 = error "Gametes must have the same traits in the same order"
+  | otherwise = unsafeGenotype [unsafeGen name (a1, a2) | ((name, a1), (_, a2)) <- zip as1 as2]
+
+-- | Crosses two gamete pools to generate all possible offspring genotypes
+crossGametePools :: GametePool -> GametePool -> [Genotype]
+crossGametePools (GametePool g1s) (GametePool g2s) =
+  [ combineGametes g1 g2
+    | g1 <- g1s,
+      g2 <- g2s
+  ]
+
+-- | Crosses two parent genotypes to produce a generation of offspring
+cross :: Genotype -> Genotype -> Generation
+cross parent1 parent2 = unsafeGeneration (crossGametePools gp1 gp2)
+  where
+    gp1 = gametesFromGenotype parent1
+    gp2 = gametesFromGenotype parent2
+
+-- | Derives phenotype from genotype by choosing dominant allele for each gene
+phenotypeFromGenotype :: Genotype -> Phenotype
+phenotypeFromGenotype (Genotype gens) = unsafePhenotype (map toTrait gens)
+  where
+    toTrait g@(Gen name _) = (name, dominantAllele g)
+
+-- | Removes duplicate genotypes from a generation
+uniqueGenotypes :: Generation -> Generation
+uniqueGenotypes (Generation gens) = unsafeGeneration (removeDuplicates gens)
+  where
+    removeDuplicates [] = []
+    removeDuplicates (x : xs)
+      | x `elem` xs = removeDuplicates xs
+      | otherwise = x : removeDuplicates xs
+
+-- | Compute the next generation by pairwise crossing all individuals in the current 'Generation'.
+computeNextGenerationFrom :: Generation -> Generation
+computeNextGenerationFrom (Generation individuals) =
+  let pools = map gametesFromGenotype individuals
+      parentPairs = pairs pools
+      nextGeneration = [g | (gp1, gp2) <- parentPairs, g <- crossGametePools gp1 gp2]
+   in unsafeGeneration nextGeneration
+
+-- | Compute N generations, starting from a single cross of two parent 'Genotype's.
+computeNGenerations :: Int -> Genotype -> Genotype -> Generation
+computeNGenerations n parent1 parent2
+  | n <= 1 = cross parent1 parent2
+  | otherwise = foldl step (cross parent1 parent2) [2 .. n]
+  where
+    step :: Generation -> Int -> Generation
+    step generation _ = computeNextGenerationFrom generation
+
+-- | Infer possible parent genotype pairs that could produce the given phenotypes
+inferParentGenotypes :: [Phenotype] -> [(Genotype, Genotype)]
+inferParentGenotypes phenotypes =
+  [ (p1, p2)
+    | p1 <- possibleGenotypes,
+      p2 <- possibleGenotypes,
+      all (`elem` offspringPhenotypes p1 p2) phenotypes
+  ]
+  where
+    -- All possible genotypes that could produce any of the phenotypes
+    possibleGenotypes = concatMap phenotypeToGenotypes phenotypes
+
+    -- Convert phenotype to possible genotypes that could produce it
+    phenotypeToGenotypes (Phenotype traits) =
+      [ unsafeGenotype $ zipWith (Gen . fst) traits genePairs
+        | genePairs <- sequence (map traitToGenes traits)
+      ]
+      where
+        traitToGenes (_, a@(Dominant l _)) =
+          [(a, a), (a, Recessive (toLower l) (getTraitSpecification a))]
+        traitToGenes (_, a@(Recessive _ _)) = [(a, a)]
+
+    -- Generate all possible offspring phenotypes from two parent genotypes
+    offspringPhenotypes p1 p2 =
+      map phenotypeFromGenotype $
+        crossGametePools (gametesFromGenotype p1) (gametesFromGenotype p2)
+
 -- Make functions
 
 -- | Construct an allele from a letter and trait specification.
@@ -200,24 +300,30 @@ makeGametePool gs = GametePool (toList gs)
 makeGeneration :: NonEmpty Genotype -> Generation
 makeGeneration gens = Generation (toList gens)
 
+-- | Unsafe constructor for 'Allele'. Partial: only accepts letters A..Z or a..z.
 unsafeAllele :: Letter -> TraitSpecification -> Allele
 unsafeAllele c spec
   | c >= 'A' && c <= 'Z' = Dominant c spec
   | c >= 'a' && c <= 'z' = Recessive c spec
   | otherwise = error "The letter is not in A..Z a..z"
 
+-- | Unsafe constructor for 'Gen'. Does not check that alleles refer to the same gene.
 unsafeGen :: TraitName -> (Allele, Allele) -> Gen
 unsafeGen name pair = Gen name pair
 
+-- | Unsafe constructor for 'Genotype'. Does not enforce unique trait names.
 unsafeGenotype :: [Gen] -> Genotype
 unsafeGenotype = Genotype
 
+-- | Unsafe constructor for 'Gamete'. Does not enforce unique trait names.
 unsafeGamete :: [(TraitName, Allele)] -> Gamete
 unsafeGamete = Gamete
 
+-- | Unsafe constructor for 'Generation'. Does not enforce non-empty list.
 unsafeGeneration :: [Genotype] -> Generation
 unsafeGeneration = Generation
 
+-- | Unsafe constructor for 'Phenotype'. Does not check anything at all.
 unsafePhenotype :: [(TraitName, Allele)] -> Phenotype
 unsafePhenotype = Phenotype
 
@@ -257,8 +363,24 @@ getTraitSpecification (Recessive _ trait) = trait
 getGenerationToPhenotypes :: Generation -> [Phenotype]
 getGenerationToPhenotypes (Generation genotypes) = map phenotypeFromGenotype genotypes
 
--- Core functions
+-- Utils
 
+-- | Return the raw symbol character of an 'Allele'.
+alleleSymbol :: Allele -> Char
+alleleSymbol (Dominant c _) = c
+alleleSymbol (Recessive c _) = c
+
+-- | Deconstruct a 'Genotype' into a list of (traitName, (allele1, allele2)).
+unGenotype :: Genotype -> [(String, (Allele, Allele))]
+unGenotype (Genotype gens) = [(getTraitName g, getAlleles g) | g <- gens]
+
+-- | Extract only the letter symbols from each gene in a 'Genotype'.
+extractAlleles :: Genotype -> [(Char, Char)]
+extractAlleles (Genotype gens) = map getAllelePair gens
+  where
+    getAllelePair (Gen _ (a1, a2)) = (getGeneLetter a1, getGeneLetter a2)
+
+-- | List all unordered pairs from a list.
 pairs :: [a] -> [(a, a)]
 pairs ls =
   [ (x, y)
@@ -266,88 +388,6 @@ pairs ls =
       (j, y) <- zip [0 ..] ls,
       i < j
   ]
-
--- | Returns the dominant allele from a gene
-dominantAllele :: Gen -> Allele
-dominantAllele (Gen _ (a1, a2))
-  | isDominant a1 = a1
-  | otherwise = a2
-
--- | Builds all possible gametes from a genotype
-gametesFromGenotype :: Genotype -> GametePool
-gametesFromGenotype (Genotype gens) = GametePool (map unsafeGamete (buildGametes gens))
-  where
-    buildGametes [] = [[]]
-    buildGametes (Gen name (a1, a2) : gs) =
-      prepend (name, a1) (buildGametes gs)
-        ++ prepend (name, a2) (buildGametes gs)
-    prepend _ [] = []
-    prepend pair (x : xs) = (pair : x) : prepend pair xs
-
--- | Combines two gametes to form a genotype
-combineGametes :: Gamete -> Gamete -> Genotype
-combineGametes (Gamete as1) (Gamete as2)
-  | map fst as1 /= map fst as2 = error "Gametes must have the same traits in the same order"
-  | otherwise = unsafeGenotype [unsafeGen name (a1, a2) | ((name, a1), (_, a2)) <- zip as1 as2]
-
--- | Crosses two gamete pools to generate all possible offspring genotypes
-crossGametePools :: GametePool -> GametePool -> [Genotype]
-crossGametePools (GametePool g1s) (GametePool g2s) =
-  [ combineGametes g1 g2
-    | g1 <- g1s,
-      g2 <- g2s
-  ]
-
--- | Crosses two parent genotypes to produce a generation of offspring
-cross :: Genotype -> Genotype -> Generation
-cross parent1 parent2 = unsafeGeneration (crossGametePools gp1 gp2)
-  where
-    gp1 = gametesFromGenotype parent1
-    gp2 = gametesFromGenotype parent2
-
--- | Derives phenotype from genotype by choosing dominant allele for each gene
-phenotypeFromGenotype :: Genotype -> Phenotype
-phenotypeFromGenotype (Genotype gens) = unsafePhenotype (map toTrait gens)
-  where
-    toTrait g@(Gen name _) = (name, dominantAllele g)
-
--- | Produces a compact string like "AaBb" from a genotype
-prettyGenotype :: Genotype -> String
-prettyGenotype (Genotype gens) = concatMap showPair gens
-  where
-    showAllele (Dominant l _) = [l]
-    showAllele (Recessive l _) = [l]
-    showPair (Gen _ (a1, a2)) = showAllele a1 ++ showAllele a2
-
--- | Produces a readable string of traits like "comb: red"
-prettyPhenotype :: Phenotype -> String
-prettyPhenotype (Phenotype traits) = unlines (map showTrait traits)
-  where
-    showTrait (name, allele) = name ++ ": " ++ getTraitSpecification allele
-
--- | Removes duplicate genotypes from a generation
-uniqueGenotypes :: Generation -> Generation
-uniqueGenotypes (Generation gens) = unsafeGeneration (removeDuplicates gens)
-  where
-    removeDuplicates [] = []
-    removeDuplicates (x : xs)
-      | x `elem` xs = removeDuplicates xs
-      | otherwise = x : removeDuplicates xs
-
-computeNextGenerationFrom :: Generation -> Generation
-computeNextGenerationFrom (Generation individuals) =
-  let pools = map gametesFromGenotype individuals
-      parentPairs = pairs pools
-      nextGeneration = [g | (gp1, gp2) <- parentPairs, g <- crossGametePools gp1 gp2]
-   in unsafeGeneration nextGeneration
-
-computeNGenerations :: Int -> Genotype -> Genotype -> Generation
-computeNGenerations n parent1 parent2
-  | n <= 1 = cross parent1 parent2
-  | otherwise = foldl step (cross parent1 parent2) [2 .. n]
-  where
-    step :: Generation -> Int -> Generation
-    step generation _ = computeNextGenerationFrom generation
 
 -- | Pretty-prints a generation with genotypes, phenotypes, and their ratios
 pprintGeneration :: Generation -> IO ()
@@ -378,41 +418,16 @@ pprintGeneration gen = do
     (return ())
     (phenotypeRatio gen)
 
--- | Infer possible parent genotype pairs that could produce the given phenotypes
-inferParentGenotypes :: [Phenotype] -> [(Genotype, Genotype)]
-inferParentGenotypes phenotypes =
-  [ (p1, p2)
-    | p1 <- possibleGenotypes,
-      p2 <- possibleGenotypes,
-      all (`elem` offspringPhenotypes p1 p2) phenotypes
-  ]
+-- | Produces a compact string like "AaBb" from a genotype
+prettyGenotype :: Genotype -> String
+prettyGenotype (Genotype gens) = concatMap showPair gens
   where
-    -- All possible genotypes that could produce any of the phenotypes
-    possibleGenotypes = concatMap phenotypeToGenotypes phenotypes
+    showAllele (Dominant l _) = [l]
+    showAllele (Recessive l _) = [l]
+    showPair (Gen _ (a1, a2)) = showAllele a1 ++ showAllele a2
 
-    -- Convert phenotype to possible genotypes that could produce it
-    phenotypeToGenotypes (Phenotype traits) =
-      [ unsafeGenotype $ zipWith (Gen . fst) traits genePairs
-        | genePairs <- sequence (map traitToGenes traits)
-      ]
-      where
-        traitToGenes (_, a@(Dominant l _)) =
-          [(a, a), (a, Recessive (toLower l) (getTraitSpecification a))]
-        traitToGenes (_, a@(Recessive _ _)) = [(a, a)]
-
-    -- Generate all possible offspring phenotypes from two parent genotypes
-    offspringPhenotypes p1 p2 =
-      map phenotypeFromGenotype $
-        crossGametePools (gametesFromGenotype p1) (gametesFromGenotype p2)
-
-alleleSymbol :: Allele -> Char
-alleleSymbol (Dominant c _) = c
-alleleSymbol (Recessive c _) = c
-
-unGenotype :: Genotype -> [(String, (Allele, Allele))]
-unGenotype (Genotype gens) = [(getTraitName g, getAlleles g) | g <- gens]
-
-extractAlleles :: Genotype -> [(Char, Char)]
-extractAlleles (Genotype gens) = map getAllelePair gens
+-- | Produces a readable string of traits like "comb: red"
+prettyPhenotype :: Phenotype -> String
+prettyPhenotype (Phenotype traits) = unlines (map showTrait traits)
   where
-    getAllelePair (Gen _ (a1, a2)) = (getGeneLetter a1, getGeneLetter a2)
+    showTrait (name, allele) = name ++ ": " ++ getTraitSpecification allele
