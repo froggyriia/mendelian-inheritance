@@ -1,6 +1,6 @@
 # MendelInheritance: Library Documentation
 
-This document provides a full reference for the types and functions in the `MendelInheritance` Haskell library, along with examples for each.
+This document provides a full reference for the types and functions in the `MendelInheritance` Haskell library.
 
 ---
 
@@ -229,7 +229,7 @@ Pretty-prints genotypes, phenotypes, and their ratios.
 
 ---
 
-## Example: Full Use Case
+## Example: Use Case
 
 ```haskell
 main :: IO ()

@@ -3,7 +3,6 @@ module Main where
 import Data.List (nub)
 import qualified Data.Map.Strict as Map
 import MendelInheritance
-import MendelInheritance (phenotypeRatio)
 import MendelInheritance.Probability
   ( Probability,
     genotypeProbabilities,
@@ -17,10 +16,10 @@ main :: IO ()
 main = do
   -- Alleles:
   -- A – comb, a – no comb; B – feathered legs, b – bare legs
-  let Just a = makeAllele 'A' "гребень"
-  let Just a' = makeAllele 'a' "нет гребня"
-  let Just b = makeAllele 'B' "оперённые ноги"
-  let Just b' = makeAllele 'b' "голые ноги"
+  let Just a = makeAllele 'A' "comb"
+  let Just a' = makeAllele 'a' "no comb"
+  let Just b = makeAllele 'B' "feathered legs"
+  let Just b' = makeAllele 'b' "bare legs"
 
   -- Parent genotypes: Rooster (AABB) × Hen (Aabb)
   let Just genAABB =

@@ -4,7 +4,7 @@ module MendelInheritance.Probability where
 
 import qualified Data.Map.Strict as Map
 import Data.Ratio (Ratio, (%))
-import MendelInheritance (Generation, Genotype, Phenotype, getGenotypes, phenotypeFromGenotype)
+import MendelInheritance
 
 -- | Probability type as a rational number of counts over total population.
 type Probability = Ratio Int

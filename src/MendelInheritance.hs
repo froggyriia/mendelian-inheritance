@@ -63,7 +63,6 @@ import Data.Function (on)
 import Data.List (nub, nubBy, sortOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.Map.Strict as Map
-import MendelInheritance.Probability (genotypeRatio, phenotypeRatio)
 
 -- Type synonyms
 
@@ -404,19 +403,6 @@ pprintGeneration gen = do
         putStrLn $ "Phenotype:\n" ++ prettyPhenotype (phenotypeFromGenotype g)
     )
     uniqueGenList
-
-  -- Then print genotype ratio
-  putStrLn "\n--- Genotype ratio ---"
-  Map.foldrWithKey
-    (\g n acc -> putStrLn (prettyGenotype g ++ " : " ++ show n) >> acc)
-    (return ())
-    (genotypeRatio gen)
-  -- Then print phenotype ratio
-  putStrLn "\n--- Phenotype ratio ---"
-  Map.foldrWithKey
-    (\g n acc -> putStrLn (prettyPhenotype g ++ " : " ++ show n) >> acc)
-    (return ())
-    (phenotypeRatio gen)
 
 -- | Produces a compact string like "AaBb" from a genotype
 prettyGenotype :: Genotype -> String
