@@ -7,7 +7,7 @@ import Data.Ratio (Ratio, (%))
 import MendelInheritance
 
 -- | Probability type as a rational number of counts over total population.
-type Probability = Ratio Int
+type Probability = Rational
 
 -- | Count occurrences of each Genotype in a Generation
 genotypeRatio :: Generation -> Map.Map Genotype Int
@@ -24,11 +24,11 @@ genotypeProbabilities :: Generation -> Map.Map Genotype Probability
 genotypeProbabilities generation =
   let counts = genotypeRatio generation
       total = length (getGenotypes generation)
-   in Map.map (\c -> c % total) counts
+   in Map.map (\c -> toInteger c % toInteger total) counts
 
 -- | Convert phenotype counts to probabilities by dividing by total individuals
 phenotypeProbabilities :: Generation -> Map.Map Phenotype Probability
 phenotypeProbabilities generation =
   let counts = phenotypeRatio generation
       total = length (getGenotypes generation)
-   in Map.map (\c -> c % total) counts
+   in Map.map (\c -> toInteger c % toInteger total) counts

@@ -55,6 +55,9 @@ module MendelInheritance
     inferParentGenotypes,
     computeNGenerations,
     computeNextGenerationFrom,
+    selfCrossGeneration,
+    nextGenerationByGameteFrequencies,
+    computeNGameteGenerations,
   )
 where
 
@@ -63,6 +66,7 @@ import Data.Function (on)
 import Data.List (nub, nubBy, sortOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.Map.Strict as Map
+import Data.Ratio ((%))
 
 -- Type synonyms
 
@@ -195,14 +199,52 @@ computeNextGenerationFrom (Generation individuals) =
       nextGeneration = [g | (gp1, gp2) <- parentPairs, g <- crossGametePools gp1 gp2]
    in unsafeGeneration nextGeneration
 
+-- | Compute the next generation by crossing each individual with itself (self-crossing)
+selfCrossGeneration :: Generation -> Generation
+selfCrossGeneration (Generation inds) =
+  let pairs = [(p1, p2) | p1 <- inds, p2 <- inds]
+      children = [cross p1 p2 | (p1, p2) <- pairs]
+   in unsafeGeneration (concatMap getGenotypes children)
+
+-- | Для одной особи получаем все её гаметы
+getGametesFromIndividual :: Genotype -> [Gamete]
+getGametesFromIndividual g = getGametes $ gametesFromGenotype g
+
+-- | Создать следующее поколение, учитывая частоты гамет (random mating by gamete pool frequencies)
+nextGenerationByGameteFrequencies :: Generation -> Generation
+nextGenerationByGameteFrequencies gen =
+  let gametes = concatMap getGametesFromIndividual (getGenotypes gen)
+      totalGametes = length gametes
+      gameteFreqs = Map.fromListWith (+) [(g, 1 % totalGametes) | g <- gametes]
+
+      -- все возможные пары гамет с вероятностями
+      allPairs =
+        [ (g1, g2, p1 * p2) | (g1, p1) <- Map.toList gameteFreqs, (g2, p2) <- Map.toList gameteFreqs
+        ]
+
+      -- для каждой пары создаём потомка с соответствующей кратностью
+      offspring =
+        concatMap
+          ( \(g1, g2, prob) ->
+              replicate (round (prob * fromIntegral totalGametes)) (combineGametes g1 g2)
+          )
+          allPairs
+   in unsafeGeneration offspring
+
+computeNGameteGenerations :: Int -> Generation -> Generation
+computeNGameteGenerations n start
+  | n <= 1 = start
+  | otherwise =
+      let nextGen = nextGenerationByGameteFrequencies start
+       in computeNGameteGenerations (n - 1) nextGen
+
 -- | Compute N generations, starting from a single cross of two parent 'Genotype's.
-computeNGenerations :: Int -> Genotype -> Genotype -> Generation
-computeNGenerations n parent1 parent2
-  | n <= 1 = cross parent1 parent2
-  | otherwise = foldl step (cross parent1 parent2) [2 .. n]
-  where
-    step :: Generation -> Int -> Generation
-    step generation _ = computeNextGenerationFrom generation
+computeNGenerations :: Int -> Generation -> Generation
+computeNGenerations n start
+  | n <= 1 = start
+  | otherwise =
+      let nextGen = nextGenerationByGameteFrequencies start
+       in computeNGenerations (n - 1) nextGen
 
 -- | Infer possible parent genotype pairs that could produce the given phenotypes
 inferParentGenotypes :: [Phenotype] -> [(Genotype, Genotype)]
