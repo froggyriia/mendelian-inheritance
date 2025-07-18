@@ -208,7 +208,7 @@ selfCrossGeneration (Generation inds) =
       children = [cross p1 p2 | (p1, p2) <- pairs]
    in unsafeGeneration (concatMap getGenotypes children)
 
--- | Crossing by gamete pool frequencies
+-- | Crossing by gamete pool frequencies (Hardy-Weinberg model)
 nextGenerationByGameteFrequencies :: Generation -> Generation
 nextGenerationByGameteFrequencies gen =
   let gametes = concatMap getGametesFromIndividual (getGenotypes gen)
