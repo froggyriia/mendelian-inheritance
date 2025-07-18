@@ -14,24 +14,35 @@ import MendelInheritance.PunnettGloss
 main :: IO ()
 main = do
   -- Alleles:
-  let Just a = makeAllele 'A' "comb"
-  let Just a' = makeAllele 'a' "no comb"
-  let Just b = makeAllele 'B' "feathered legs"
-  let Just b' = makeAllele 'b' "bare legs"
+  let a = case makeAllele 'A' "comb" of
+        Just allele -> allele
+        Nothing -> error "Invalid allele: A"
+  let a' = case makeAllele 'a' "no comb" of
+        Just allele -> allele
+        Nothing -> error "Invalid allele: a"
+  let b = case makeAllele 'B' "feathered legs" of
+        Just allele -> allele
+        Nothing -> error "Invalid allele: B"
+  let b' = case makeAllele 'b' "bare legs" of
+        Just allele -> allele
+        Nothing -> error "Invalid allele: b"
 
   -- Parents: Rooster (AABB) × Hen (Aabb)
-  let Just genAABB =
-        makeGenotype
-          =<< sequence
-            [ makeGen "comb" (a, a),
-              makeGen "legs" (b, b)
-            ]
-  let Just genAabb =
-        makeGenotype
-          =<< sequence
-            [ makeGen "comb" (a, a'),
-              makeGen "legs" (b', b')
-            ]
+  let genAABB = case makeGenotype
+        =<< sequence
+          [ makeGen "comb" (a, a),
+            makeGen "legs" (b, b)
+          ] of
+        Just g -> g
+        Nothing -> error "Invalid genotype: AABB"
+
+  let genAabb = case makeGenotype
+        =<< sequence
+          [ makeGen "comb" (a, a'),
+            makeGen "legs" (b', b')
+          ] of
+        Just g -> g
+        Nothing -> error "Invalid genotype: Aabb"
 
   putStrLn "\n--- Parents ---"
   putStrLn $ "Rooster: " ++ prettyGenotype genAABB

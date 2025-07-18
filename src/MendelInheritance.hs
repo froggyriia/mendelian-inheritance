@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TupleSections #-}
 
 module MendelInheritance
@@ -55,9 +56,9 @@ module MendelInheritance
     inferParentGenotypes,
     computeNGenerations,
     computeNextGenerationFrom,
-    selfCrossGeneration,
     nextGenerationByGameteFrequencies,
     computeNGameteGenerations,
+    selfCrossGeneration,
   )
 where
 
@@ -124,13 +125,14 @@ instance Show Genotype where
 
 instance Show Phenotype where
   show (Phenotype []) = ""
-  show (Phenotype ((traitname, a) : xs)) = show a ++ show (Phenotype xs)
+  show (Phenotype ((_, a) : xs)) = show a ++ show (Phenotype xs)
 
 instance Show Gamete where
   show (Gamete []) = ""
-  show (Gamete ((traitname, a) : as)) = show a ++ show (Gamete as)
+  show (Gamete ((_, a) : as)) = show a ++ show (Gamete as)
 
 instance Show GametePool where
+  show :: GametePool -> String
   show (GametePool gametes) = unwords (map show gametes)
 
 instance Show Generation where
@@ -206,11 +208,7 @@ selfCrossGeneration (Generation inds) =
       children = [cross p1 p2 | (p1, p2) <- pairs]
    in unsafeGeneration (concatMap getGenotypes children)
 
--- | Для одной особи получаем все её гаметы
-getGametesFromIndividual :: Genotype -> [Gamete]
-getGametesFromIndividual g = getGametes $ gametesFromGenotype g
-
--- | Создать следующее поколение, учитывая частоты гамет (random mating by gamete pool frequencies)
+-- | Crossing by gamete pool frequencies (Hardy-Weinberg model)
 nextGenerationByGameteFrequencies :: Generation -> Generation
 nextGenerationByGameteFrequencies gen =
   let gametes = concatMap getGametesFromIndividual (getGenotypes gen)
@@ -320,8 +318,6 @@ makeGenotype gens
     -- for sorting we pull out the letter of the first allele, uppercase
     geneKey (Gen _ (a1, _)) = toUpper (getGeneLetter a1)
 
-    getTraitName (Gen nm _) = nm
-
 -- | Construct a gamete from a list of trait-allele pairs.
 -- Ensures trait names are unique in the gamete.
 makeGamete :: [(TraitName, Allele)] -> Maybe Gamete
@@ -395,6 +391,10 @@ getTraitName (Gen name _) = name
 getAlleles :: Gen -> (Allele, Allele)
 getAlleles (Gen _ pair) = pair
 
+-- | Get all gametes from one individual (genotype)
+getGametesFromIndividual :: Genotype -> [Gamete]
+getGametesFromIndividual g = getGametes (gametesFromGenotype g)
+
 -- | Gets the descriptive trait specification from an allele
 getTraitSpecification :: Allele -> TraitSpecification
 getTraitSpecification (Dominant _ trait) = trait
@@ -425,8 +425,8 @@ extractAlleles (Genotype gens) = map getAllelePair gens
 pairs :: [a] -> [(a, a)]
 pairs ls =
   [ (x, y)
-    | (i, x) <- zip [0 ..] ls,
-      (j, y) <- zip [0 ..] ls,
+    | (i, x) <- zip [0 :: Int ..] ls,
+      (j, y) <- zip [0 :: Int ..] ls,
       i < j
   ]
 
@@ -434,7 +434,7 @@ pairs ls =
 pprintGeneration :: Generation -> IO ()
 pprintGeneration gen = do
   -- extracting genotypes from generation
-  let genList = getGenotypes gen
+
   let uniqueGenList = getGenotypes $ uniqueGenotypes gen
 
   putStrLn "\n--- First generation ---"
